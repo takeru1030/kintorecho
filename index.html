@@ -1,0 +1,880 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#09080D"><meta name="format-detection" content="telephone=no"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="筋トレ帳"><meta name="description" content="ジムでの筋トレを1セットずつ記録。自己ベスト、カレンダー、重量の推移まで。"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{background:#09080D;scroll-padding-top:env(safe-area-inset-top,0px);-webkit-text-size-adjust:100%}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#09080D;color:#fff;overscroll-behavior-y:none}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>筋トレ帳</title>
+</head><body>
+<style>
+/* Layout: one narrow phone-first column. Entry panel on top (the only card), today's sets below, other views in tabs.
+   Look: always black + purple (single dark theme, chosen on purpose). */
+:root{
+  --bg:#09080D; --surface:#14111C; --ink:#FFFFFF; --muted:#D9D4E6; --btn:#2563EB; --btn-ink:#FFFFFF; --line:#2B2539; --chip:#1E1A29;
+  --accent:#A878FF; --accent-ink:#0B0812; --accent-soft:#2A1E47; --danger:#FF6B8E; --sun:#FF6B8E; --gold:#FFC94D; --gold-ink:#1A1204;
+  --grad:linear-gradient(135deg,#6D28D9 0%,#9F5BFF 60%,#C084FC 100%); --glow:0 8px 28px rgb(140 82 255 / .35);
+  --f-num:"Barlow Condensed","Avenir Next Condensed","DIN Condensed","Roboto Condensed","sans-serif-condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Hiragino Sans","Noto Sans CJK JP","Noto Sans JP","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:radial-gradient(120% 60% at 50% -10%, #241544 0%, transparent 60%) no-repeat, var(--bg);background-attachment:fixed;color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{max-width:540px;margin:0 auto;padding-inline:16px;padding-block:16px 96px;display:flex;flex-direction:column;gap:16px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand small{display:block;font-family:var(--f-num);font-weight:600;letter-spacing:.18em;font-size:12px;color:var(--muted)}
+.brand h1{margin:0;font-size:24px;font-weight:700;letter-spacing:.02em;line-height:1.2}
+.tabs{display:flex;background:var(--chip);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;padding:6px 16px;border-radius:999px;font-weight:500;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--grad);color:#fff;box-shadow:var(--glow)}
+.brand small{color:var(--accent)!important}
+
+.datebar{display:flex;align-items:center;gap:8px}
+.datebar .nav{border:1px solid var(--line);background:none;width:40px;height:40px;border-radius:10px;font-size:20px;line-height:1}
+#date-label{flex:1;text-align:center;font-weight:700;font-size:17px}
+#go-today{border:0;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:700}
+
+.entry{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid transparent;background:var(--chip);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.chip.ghost{background:none;border-color:var(--line);color:var(--muted)}
+.chip .x{font-weight:700;color:var(--danger)}
+.chip[aria-pressed="true"] .x{color:var(--accent-ink)}
+.addrow{display:flex;gap:8px}
+.addrow input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 12px}
+.addrow button{border:0;background:var(--ink);color:var(--bg);border-radius:10px;padding:8px 16px;font-weight:700}
+
+.steppers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stepper{display:flex;flex-direction:column;gap:4px;min-width:0}
+.stepper label{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.ctl input{font-size:clamp(22px,7.2vw,32px)!important;letter-spacing:-.01em}
+.ctl button{width:38px!important}
+.ctl{display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow:hidden}
+.ctl button{border:0;background:none;width:44px;height:56px;font-size:24px;color:var(--accent);flex:none}
+.ctl button:active{background:var(--accent-soft)}
+.ctl .val{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:center;gap:2px}
+.ctl input{width:100%;min-width:0;border:0;background:none;text-align:center;font-family:var(--f-num);font-weight:700;font-size:32px;padding:0;font-variant-numeric:tabular-nums}
+.ctl input:focus{outline:none}
+.ctl .unit{font-size:12px;color:var(--muted);margin-right:4px}
+.primary{border:0;background:var(--grad);color:#fff;box-shadow:var(--glow);border-radius:12px;height:52px;font-size:17px;font-weight:700;letter-spacing:.04em}
+.primary:disabled{opacity:.4;cursor:default}
+#prev-info{margin:0;font-size:13px;color:var(--muted);min-height:1.5em;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+#prev-info .auto{color:var(--accent);font-weight:500}
+#prev-info .chal{border:1px dashed var(--accent);background:var(--accent-soft);color:var(--ink);border-radius:10px;padding:6px 12px;font-size:13px;font-weight:500;text-align:left}
+#prev-info b{color:var(--ink);font-weight:500;font-family:var(--f-num);font-size:15px;letter-spacing:.02em}
+
+.daysum{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:8px}
+.daysum strong{font-family:var(--f-num);font-size:18px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.daysum .dur{flex-basis:100%;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.daysum .dur strong{font-size:26px;font-weight:700}
+.daysum .dur em{font-style:normal;font-family:var(--f-num);font-size:15px}
+#rest{font-family:var(--f-num);font-size:15px;color:var(--accent);font-weight:600}
+
+.log{display:flex;flex-direction:column;gap:18px}
+.exblock h3{margin:0 0 6px;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.exblock h3 span{font-weight:400;color:var(--muted);font-size:13px}
+.sets{display:flex;flex-direction:column;gap:2px}
+.setrow{display:flex;align-items:center;gap:8px}
+.set{flex:1;display:grid;grid-template-columns:2.2em 1fr;align-items:baseline;border:0;background:none;text-align:left;padding:6px 8px;border-radius:8px}
+.set:hover{background:var(--chip)}
+.set.sel{background:var(--chip)}
+.set .n{font-family:var(--f-num);color:var(--muted);font-size:14px}
+.set .w{font-family:var(--f-num);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.set .w small{font-size:13px;color:var(--muted);font-weight:500;margin:0 6px 0 2px}
+.del{border:1px solid var(--danger);color:var(--danger);background:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700}
+.set{grid-template-columns:2.2em 1fr auto}
+.prb{background:var(--gold);color:var(--gold-ink);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:.04em;white-space:nowrap;align-self:center}
+.cell{position:relative}
+.cell .prdot{position:absolute;top:3px;right:4px;background:var(--gold);color:var(--gold-ink);border-radius:999px;font-size:9px;font-weight:700;line-height:1;padding:2px 4px;font-family:var(--f-num)}
+.day .d .prc{color:var(--gold);font-weight:700}
+.prbanner{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:10;width:min(480px,calc(100% - 32px));background:var(--grad);color:#fff;border:1px solid var(--gold);border-radius:16px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:0 10px 40px rgb(140 82 255 / .5)}
+.prbanner b{color:var(--gold);font-size:18px;letter-spacing:.06em}
+.prbanner span{font-size:14px}
+@media (prefers-reduced-motion:no-preference){.prbanner:not([hidden]){animation:prin .45s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes prin{from{transform:translate(-50%,-24px) scale(.92);opacity:0}to{transform:translate(-50%,0) scale(1);opacity:1}}}
+.cats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+@media (min-width:500px){.cats{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.cat{position:relative;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:10px;padding:8px 4px;font-weight:700;font-size:14px}
+.cat[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.cat .did{position:absolute;top:4px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.cat[aria-pressed="true"] .did{background:#fff}
+.cell{gap:3px;font-size:15px}
+.cell .cc{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:42px;min-height:12px}
+.cell .cc i{font-style:normal;width:12px;height:12px;border-radius:3px;background:var(--cc);color:#0B0812;font-family:var(--f-body);font-size:8px;font-weight:700;line-height:12px;text-align:center}
+.calcats{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:12px;color:var(--muted)}
+.calcats span{display:inline-flex;align-items:center;gap:4px}
+.calcats b{font-family:var(--f-num);font-size:18px;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.calcats .zero{opacity:.4}
+.cat .did{background:var(--cc)!important}
+.tag{font-style:normal;font-size:11px;font-weight:700;border:1px solid var(--cc,var(--accent));color:var(--cc,var(--accent));border-radius:6px;padding:0 6px;line-height:1.6;white-space:nowrap}
+.exblock h3 .exn{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15px;font-weight:700;min-width:0}
+.daysum .parts{flex-basis:100%;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.day .d .dd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-weight:700;font-size:15px;color:var(--ink)}
+.cathead{margin:14px 0 0;padding:6px 0;font-size:13px;color:var(--accent);letter-spacing:.08em;border-bottom:1px solid var(--line)}
+.slider{display:flex;flex-direction:column;gap:0}
+#kg-range{-webkit-appearance:none;appearance:none;width:100%;height:36px;background:none;margin:0;touch-action:pan-y;cursor:pointer}
+#kg-range:focus{outline:none}
+#kg-range::-webkit-slider-runnable-track{height:8px;border-radius:999px;background:linear-gradient(90deg,var(--btn) 0 var(--p,0%),var(--chip) var(--p,0%) 100%)}
+#kg-range::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#fff;border:4px solid var(--btn);margin-top:-11px;box-shadow:0 2px 10px rgb(0 0 0 / .5)}
+#kg-range:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px rgb(37 99 235 / .4)}
+#kg-range::-moz-range-track{height:8px;border-radius:999px;background:var(--chip)}
+#kg-range::-moz-range-progress{height:8px;border-radius:999px;background:var(--btn)}
+#kg-range::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:4px solid var(--btn)}
+.sl-scale{display:flex;justify-content:space-between;gap:8px;font-family:var(--f-num);font-size:13px;color:var(--muted)}
+.sl-scale #sl-hint{font-family:var(--f-body);font-size:11px;text-align:center}
+.memo{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:14px}
+.memo-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.memo-head label{font-size:12px;font-weight:700;letter-spacing:.06em}
+#memo-state{font-size:12px;color:var(--muted)}
+#memo{width:100%;min-height:84px;resize:vertical;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:10px 12px;line-height:1.6}
+#memo::placeholder{color:var(--muted);opacity:.7}
+#memo:focus{outline:none;border-color:var(--btn)}
+.day .memo-l{color:var(--ink);opacity:.85}
+.empty{color:var(--muted);font-size:14px;padding:12px 0}
+.empty b{color:var(--ink)}
+
+h2.sec{font-size:13px;letter-spacing:.08em;color:var(--muted);margin:8px 0 6px;font-weight:700}
+.bests{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.best{border:0;border-bottom:1px solid var(--line);background:none;text-align:left;padding:10px 4px;display:grid;grid-template-columns:1fr auto auto;gap:4px 16px;align-items:baseline}
+.best .name{font-weight:500;min-width:0}
+.best .k{font-family:var(--f-num);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.best .k small{font-size:12px;color:var(--muted);font-weight:500;display:block;line-height:1;letter-spacing:.06em}
+.best .meta{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.spark{grid-column:1/-1;width:100%;height:auto;display:block;margin-top:6px}
+.daylist{display:flex;flex-direction:column;gap:4px}
+.day{border:0;background:none;text-align:left;padding:10px 4px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.day .d{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.day .d span{font-weight:400;font-size:12px;color:var(--muted)}
+.day .l{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.day .l b{color:var(--ink);font-weight:500}
+
+.cal{display:flex;flex-direction:column;gap:12px}
+.calhead{display:flex;align-items:center;gap:8px}
+.calhead .nav{border:1px solid var(--line);background:none;width:40px;height:40px;border-radius:10px;font-size:20px;line-height:1}
+#cal-title{flex:1;text-align:center;font-weight:700;font-size:17px}
+.calsum{display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--muted);letter-spacing:.04em}
+.calsum strong{display:block;font-family:var(--f-num);font-size:26px;line-height:1.1;color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:0}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{text-align:center;font-size:12px;color:var(--muted);font-weight:700;padding-bottom:2px}
+.dow:first-child{color:var(--sun)}
+.cell{aspect-ratio:1;max-width:100%;border:0;background:none;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;font-family:var(--f-num);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cell.blank{visibility:hidden}
+.cell.future{color:var(--muted);opacity:.45;cursor:default}
+.cell.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cell.done{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgb(140 82 255 / .35)}
+.cell.light{background:var(--accent-soft);color:var(--ink)}
+.cell .c{font-size:11px;font-weight:500;line-height:1;opacity:.85;min-height:11px}
+.cell:not(.future):not(.done):not(.light):hover{background:var(--chip)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-2px;margin-right:4px}
+.foot{font-size:12px;color:var(--muted);text-align:center;margin:0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--chip);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px 10px 16px;display:flex;gap:14px;align-items:center;font-size:14px;box-shadow:0 6px 20px rgb(0 0 0 / .25);max-width:calc(100% - 32px)}
+.toast button{border:0;background:var(--btn);color:var(--btn-ink);font-weight:700;border-radius:8px;padding:4px 10px}
+.entry{box-shadow:0 0 0 1px rgb(168 120 255 / .08), 0 20px 50px rgb(0 0 0 / .5)}
+/* ボタンは白 */
+.chip[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink)}
+.chip[aria-pressed="true"] .x{color:var(--danger)}
+.tabs button[aria-selected="true"]{background:var(--btn);color:var(--btn-ink)}
+.tabs button{color:var(--ink)}
+.primary{background:var(--btn);color:var(--btn-ink);box-shadow:0 8px 28px rgb(37 99 235 / .4)}
+.chip[aria-pressed="true"] .x{color:var(--btn-ink)}
+.ctl button{color:var(--ink)}
+.ctl button:active{background:var(--chip)}
+#go-today{background:var(--btn);color:var(--btn-ink)}
+.addrow button{background:var(--btn);color:var(--btn-ink)}
+.datebar .nav,.calhead .nav{color:var(--ink);border-color:var(--muted)}
+.chip.ghost{color:var(--ink);border-color:var(--muted)}
+#prev-info .auto{color:var(--ink)}
+#rest{color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.set,.chip,.primary{transition:background .12s,color .12s}}
+.backup{display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--muted)}
+.backup p{margin:0}
+.brow{display:flex;gap:8px}
+.bbtn{border:0;background:var(--btn);color:var(--btn-ink);border-radius:10px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer}
+.bbtn.ghost{background:none;border:1px solid var(--muted);color:var(--ink)}
+body{-webkit-user-select:none;user-select:none}
+input,textarea{-webkit-user-select:text;user-select:text}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><small>TRAINING LOG</small><h1>筋トレ帳</h1></div>
+    <nav class="tabs" role="tablist">
+      <button id="tab-log" role="tab" aria-selected="true">記録</button>
+      <button id="tab-cal" role="tab" aria-selected="false">カレンダー</button>
+      <button id="tab-hist" role="tab" aria-selected="false">履歴</button>
+    </nav>
+  </header>
+
+  <section id="view-log" style="display:flex;flex-direction:column;gap:16px">
+    <div class="datebar">
+      <button class="nav" id="prev-day" aria-label="前の日">‹</button>
+      <div id="date-label"></div>
+      <button id="go-today" hidden>今日へ</button>
+      <button class="nav" id="next-day" aria-label="次の日">›</button>
+    </div>
+
+    <div class="entry">
+      <div class="cats" id="cats" role="group" aria-label="部位"></div>
+      <div class="chips" id="chips"></div>
+      <div class="addrow" id="add-row" hidden>
+        <input id="new-ex" placeholder="種目名（例：ケーブルクロス）" maxlength="30">
+        <button id="new-ex-save">追加</button>
+      </div>
+      <div class="steppers">
+        <div class="stepper">
+          <label for="kg" id="lab-a">重量</label>
+          <div class="ctl">
+            <button data-step="a" data-sign="-1" aria-label="減らす">−</button>
+            <div class="val"><input id="kg" inputmode="decimal" autocomplete="off"><span class="unit" id="unit-a">kg</span></div>
+            <button data-step="a" data-sign="1" aria-label="増やす">+</button>
+          </div>
+        </div>
+        <div class="stepper">
+          <label for="reps" id="lab-b">回数</label>
+          <div class="ctl">
+            <button data-step="b" data-sign="-1" aria-label="減らす">−</button>
+            <div class="val"><input id="reps" inputmode="numeric" autocomplete="off"><span class="unit" id="unit-b">回</span></div>
+            <button data-step="b" data-sign="1" aria-label="増やす">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="slider">
+        <input type="range" id="kg-range" min="0" max="100" step="0.5" aria-label="重量をスライドで調整">
+        <div class="sl-scale"><span>0</span><span id="sl-hint">左右にスライドで重量を変更</span><span id="sl-max">100kg</span></div>
+      </div>
+      <button class="primary" id="add-set">セットを記録</button>
+      <p id="prev-info"></p>
+    </div>
+
+    <div class="daysum" id="daysum"></div>
+    <div class="log" id="log"></div>
+
+    <div class="memo">
+      <div class="memo-head"><label for="memo">メモ</label><span id="memo-state"></span></div>
+      <textarea id="memo" rows="3" maxlength="1000" placeholder="体調、フォームの気づき、次回やりたいことなど"></textarea>
+    </div>
+  </section>
+
+  <section id="view-cal" class="cal" hidden>
+    <div class="calhead">
+      <button class="nav" id="cal-prev" aria-label="前の月">‹</button>
+      <div id="cal-title"></div>
+      <button class="nav" id="cal-next" aria-label="次の月">›</button>
+    </div>
+    <div class="calsum" id="cal-sum"></div>
+    <div class="calcats" id="cal-cats" aria-label="今月それぞれの部位をやった日数"></div>
+    <div class="grid" id="cal-grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--grad)"></i>しっかり（10セット以上）</span>
+      <span><i style="background:var(--accent-soft)"></i>軽め</span>
+      <span><i style="background:var(--gold)"></i>自己ベストを更新した日</span>
+      <span>色の小さな文字＝その日にやった部位（脚・肩・腕・胸・背＝背中・有＝有酸素）</span>
+      <span>日付をタップでその日の記録へ</span>
+    </div>
+  </section>
+
+  <section id="view-hist" hidden>
+    <h2 class="sec">種目ごとのベスト</h2>
+    <div class="bests" id="bests"></div>
+    <h2 class="sec" style="margin-top:24px">トレーニングした日</h2>
+    <div class="daylist" id="daylist"></div>
+    <h2 class="sec" style="margin-top:24px">バックアップ</h2>
+    <div class="backup">
+      <p>記録はこの端末の中だけに保存されています。機種変更やアプリの削除の前に書き出しておくと、新しい端末で読み込んで続きから使えます。</p>
+      <div class="brow"><button id="bk-export" class="bbtn">書き出す</button><label class="bbtn ghost" for="bk-file">読み込む</label><input type="file" id="bk-file" accept="application/json,.json" hidden></div>
+    </div>
+  </section>
+
+  <p class="foot" id="save-note">読み込み中…</p>
+</div>
+<div class="prbanner" id="prbanner" role="status" hidden><b>自己ベスト更新！</b><span id="pr-msg"></span></div>
+<div class="toast" id="toast" hidden><span id="toast-msg"></span><button id="toast-undo">元に戻す</button></div>
+
+<script>
+const CATS = ["脚","肩","腕","胸","背中","有酸素"];
+const CARDIO = "有酸素";
+const DEFAULT_BY_CAT = {
+  "脚":["スクワット","レッグプレス","ブルガリアンスクワット","レッグエクステンション","レッグカール"],
+  "肩":["ショルダープレス","サイドレイズ","リアレイズ"],
+  "腕":["ダンベルカール","ハンマーカール","トライセプスエクステンション"],
+  "胸":["ベンチプレス","インクラインベンチプレス","ダンベルフライ","腕立て伏せ"],
+  "背中":["デッドリフト","ラットプルダウン","ベントオーバーロウ","懸垂"],
+  "有酸素":["ランニング","バイク","ウォーキング"],
+};
+const DEFAULT_CAT = {}; for (const c of CATS) for (const e of DEFAULT_BY_CAT[c]) DEFAULT_CAT[e] = c;
+const DEFAULT_EX = CATS.flatMap(c => DEFAULT_BY_CAT[c]);
+const catOf = ex => S.cats[ex] || DEFAULT_CAT[ex] || "その他";
+const CAT_COLOR = {"脚":"#34D399","肩":"#2DD4BF","腕":"#FB923C","胸":"#F87171","背中":"#60A5FA","有酸素":"#E5E7EB","その他":"#9C95AE"};
+const CAT_SHORT = {"脚":"脚","肩":"肩","腕":"腕","胸":"胸","背中":"背","有酸素":"有","その他":"他"};
+const catTag = c => `<em class="tag" style="--cc:${CAT_COLOR[c]}">${c}</em>`;
+const byCatOrder = (a, b) => [...CATS, "その他"].indexOf(a) - [...CATS, "その他"].indexOf(b);
+const isCardioSet = s => s.min != null;
+const fmtNum = n => String(+(+n).toFixed(2));
+const LS_KEY = "kintore-v1";
+const $ = id => document.getElementById(id);
+
+const pad = n => String(n).padStart(2,"0");
+const toStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayStr = () => toStr(new Date());
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const shift = (s,n) => { const d = parse(s); d.setDate(d.getDate()+n); return toStr(d); };
+const jpDate = s => { const d = parse(s); return `${d.getMonth()+1}月${d.getDate()}日（${"日月火水木金土"[d.getDay()]}）`; };
+const shortDate = s => { const d = parse(s); return `${d.getMonth()+1}/${d.getDate()}`; };
+const fmtKg = kg => kg > 0 ? String(+(+kg).toFixed(2)) : "自重";
+const setTxt = s => isCardioSet(s) ? `${s.min}分${s.km ? ` ${fmtNum(s.km)}km` : ""}`
+                  : s.kg > 0 ? `${fmtKg(s.kg)}×${s.reps}` : `自重×${s.reps}`;
+const e1rm = s => s.kg * (1 + s.reps/30);
+// 最初のセットから最後のセットまでの時間。その日のうちに記録したセットだけで数える
+function sessionTime(date){
+  const ts = ((S.days[date] && S.days[date].sets) || []).map(s => s.at).filter(t => t && toStr(new Date(t)) === date);
+  if (ts.length < 2) return null;
+  const start = Math.min(...ts), end = Math.max(...ts);
+  return {start, end, min: Math.round((end - start) / 60000)};
+}
+const fmtDur = m => m >= 60 ? `${Math.floor(m/60)}時間${m%60 ? (m%60) + "分" : ""}` : `${m}分`;
+const hm = t => { const d = new Date(t); return `${d.getHours()}:${pad(d.getMinutes())}`; };
+const esc = t => String(t).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+const S = { days:{}, exercises:[...DEFAULT_EX], cats:{}, cat:"胸", sel:"ベンチプレス", date:todayStr(), kg:20, reps:10, min:30, km:5,
+            editing:false, selSet:null, view:"log", openBest:null, mode:"loading",
+            calMonth:[new Date().getFullYear(), new Date().getMonth()] };
+
+/* ---------- storage: この端末の中だけに保存（アプリでは Capacitor Preferences、ブラウザでは localStorage） ---------- */
+const Prefs = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) || null;
+const isApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function readData(o){ if (o) { S.days = o.days || {}; applyPrefs(o); } }
+// 部位分け以前の種目リストには、新しい初期種目を足す
+function applyPrefs(p){
+  if (!Array.isArray(p.exercises)) return;
+  S.exercises = [...p.exercises];
+  S.cats = {...(p.cats || {})};
+  if (!p.v) for (const e of DEFAULT_EX) if (!S.exercises.includes(e)) S.exercises.push(e);
+}
+const prefsBody = () => ({exercises:S.exercises, cats:S.cats, v:2});
+const snapshot = () => JSON.stringify({days:S.days, ...prefsBody()});
+let saveTimer = null;
+function saveLocal(){
+  const json = snapshot();
+  try { localStorage.setItem(LS_KEY, json); } catch {}
+  if (Prefs) { clearTimeout(saveTimer); saveTimer = setTimeout(() => {
+    Prefs.set({key:LS_KEY, value:json}).catch(() => note("保存できませんでした。端末の空き容量を確認してください。")); }, 150); }
+}
+function persist(){ saveLocal(); }
+function note(t){ $("save-note").textContent = t; }
+const STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const LOCAL_NOTE = isApp || STANDALONE
+  ? "記録はこの端末の中だけに保存しています。機種変更の前に「履歴 → バックアップ」で書き出してください。"
+  : "記録はこのブラウザの中に保存しています。ホーム画面に追加すると、アプリとして使えて記録も消えにくくなります。";
+
+async function initStore(){
+  let o = null;
+  if (Prefs) { try { const r = await Prefs.get({key:LS_KEY}); if (r && r.value) o = JSON.parse(r.value); } catch {} }
+  if (!o) { try { o = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch {} }
+  readData(o);
+  if (!S.exercises.includes(S.sel)) S.sel = S.exercises.find(e => catOf(e) === S.cat) || null;
+  prefill(); note(LOCAL_NOTE); render();
+  if (Prefs && o) saveLocal(); // localStorage にだけあった記録を Preferences に移す
+}
+// アプリが裏に回る直前に、書きかけのメモも保存する
+document.addEventListener("visibilitychange", () => { if (document.hidden) { flushMemo(); if (Prefs) { clearTimeout(saveTimer); Prefs.set({key:LS_KEY, value:snapshot()}).catch(() => {}); } } });
+
+/* ---------- バックアップ（書き出し・読み込み） ---------- */
+async function exportBackup(){
+  const json = JSON.stringify({app:"kintorecho", exportedAt:new Date().toISOString(), days:S.days, ...prefsBody()});
+  const name = `kintorecho-backup-${todayStr()}.json`;
+  const P = window.Capacitor && window.Capacitor.Plugins;
+  try {
+    if (isApp && P && P.Filesystem && P.Share) {
+      const w = await P.Filesystem.writeFile({path:name, data:json, directory:"CACHE", encoding:"utf8"});
+      await P.Share.share({title:"筋トレ帳のバックアップ", files:[w.uri]});
+    } else if (navigator.canShare && /iPhone|iPad|Android/i.test(navigator.userAgent)
+               && navigator.canShare({files:[new File([json], name, {type:"application/json"})]})) {
+      await navigator.share({title:"筋トレ帳のバックアップ", files:[new File([json], name, {type:"application/json"})]});
+    } else {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([json], {type:"application/json"})); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    toast("バックアップを書き出しました");
+  } catch (e) { if (!(e && (e.name === "AbortError" || /cancel/i.test(String(e.message || e))))) toast("書き出せませんでした"); }
+}
+function importBackup(file){
+  const r = new FileReader();
+  r.onload = () => {
+    let o; try { o = JSON.parse(r.result); } catch { toast("バックアップのファイルではありません"); return; }
+    if (!o || typeof o.days !== "object" || !Array.isArray(o.exercises)) { toast("バックアップのファイルではありません"); return; }
+    const prev = snapshot();
+    readData(o); S.date = todayStr(); prefill(); saveLocal(); render();
+    toast(`${Object.keys(o.days).length}日分の記録を読み込みました`, () => { readData(JSON.parse(prev)); prefill(); saveLocal(); render(); });
+  };
+  r.readAsText(file);
+}
+
+/* ---------- derived ---------- */
+const dayOf = date => S.days[date] || {date, sets:[]};
+const sortedDates = () => Object.keys(S.days).filter(k => S.days[k].sets.length).sort();
+function lastSession(ex, before){
+  const ds = sortedDates().filter(d => d < before).reverse();
+  for (const d of ds) { const s = S.days[d].sets.filter(x => x.ex === ex); if (s.length) return {date:d, sets:s}; }
+  return null;
+}
+/* ---------- 自己ベスト：それより前の全記録（過去日＋当日の前のセット）を上回ったセット ---------- */
+function computePRs(){
+  const pr = {}, best = {};
+  for (const d of sortedDates()) for (const s of S.days[d].sets) {
+    const b = best[s.ex];
+    if (isCardioSet(s)) { // 有酸素は距離・時間の最長で
+      if (b && b.km > 0 && s.km > b.km) pr[s.id] = {type:"距離", from:`${fmtNum(b.km)}km`, to:`${fmtNum(s.km)}km`};
+      else if (b && b.min > 0 && s.min > b.min) pr[s.id] = {type:"時間", from:`${b.min}分`, to:`${s.min}分`};
+      best[s.ex] = {km:Math.max(b ? b.km : 0, s.km || 0), min:Math.max(b ? b.min : 0, s.min || 0)};
+      continue;
+    }
+    if (b) {
+      if (s.kg > 0 && s.kg > b.kg) pr[s.id] = {type:"重量", from:`${fmtKg(b.kg)}kg`, to:`${fmtKg(s.kg)}kg`};
+      else if (s.kg > 0 && e1rm(s) > b.e1 + 0.01) pr[s.id] = {type:"1RM", from:`推定1RM ${Math.round(b.e1*2)/2}kg`, to:`${Math.round(e1rm(s)*2)/2}kg`};
+      else if (s.kg === 0 && b.bw > 0 && s.reps > b.bw) pr[s.id] = {type:"回数", from:`${b.bw}回`, to:`${s.reps}回`};
+    }
+    best[s.ex] = {kg:Math.max(b ? b.kg : 0, s.kg), e1:Math.max(b ? b.e1 : 0, e1rm(s)),
+                  bw:s.kg === 0 ? Math.max(b ? b.bw : 0, s.reps) : (b ? b.bw : 0)};
+  }
+  return pr;
+}
+let prTimer = null;
+function showPR(s, p){
+  $("pr-msg").textContent = `${s.ex}　${p.from} → ${p.to}`;
+  $("prbanner").hidden = false;
+  clearTimeout(prTimer); prTimer = setTimeout(() => { $("prbanner").hidden = true; }, 4500);
+}
+
+/* ---------- いつもの重さを自動で入れる ---------- */
+function recentSessions(ex, before, n = 5){
+  const out = [];
+  for (const d of sortedDates().filter(d => d < before).reverse()) {
+    const s = S.days[d].sets.filter(x => x.ex === ex);
+    if (s.length) out.push({date:d, sets:s});
+    if (out.length >= n) break;
+  }
+  return out;
+}
+// 直近の回で i セット目に一番よく使った重さ（同数なら新しい方）
+function usualAt(sessions, i){
+  const c = sessions.map(s => s.sets[i]).filter(Boolean);
+  if (!c.length) return null;
+  const cnt = new Map(); c.forEach(s => cnt.set(s.kg, (cnt.get(s.kg) || 0) + 1));
+  let kg = c[0].kg, top = 0;
+  c.forEach(s => { if (cnt.get(s.kg) > top) { top = cnt.get(s.kg); kg = s.kg; } });
+  return {kg, reps:c.find(s => s.kg === kg).reps};
+}
+function suggest(ex, date){
+  const hist = recentSessions(ex, date);
+  const today = dayOf(date).sets.filter(s => s.ex === ex);
+  const i = today.length, last = today[i-1];
+  const u = usualAt(hist, i);
+  if (!u) return last ? {kg:last.kg, reps:last.reps, why:"直前のセットと同じ"} : null;
+  let kg = u.kg, why = `いつもの${i+1}セット目（直近${hist.length}回から）`;
+  const up = last && usualAt(hist, i-1);
+  if (up && last.kg !== up.kg) { // 今日いつもより重い/軽いなら、その差をこのセットにも反映
+    const diff = Math.round((last.kg - up.kg) * 100) / 100;
+    kg = Math.max(0, Math.round((u.kg + diff) * 100) / 100);
+    why = `今日はいつもより${diff > 0 ? "+" : ""}${diff}kgなので、${i+1}セット目もそれに合わせて調整`;
+  }
+  return {kg, reps:u.reps, why};
+}
+// 同じ1セット目の重さで2回続けて回数を落とさずにできたら、1段階上の重さを提案
+function challenge(ex, date){
+  const [a, b] = recentSessions(ex, date, 2);
+  if (!a || !b || a.sets[0].kg <= 0 || a.sets[0].kg !== b.sets[0].kg) return null;
+  const held = b.sets.every((s, i) => a.sets[i] && a.sets[i].kg >= s.kg && a.sets[i].reps >= s.reps);
+  return held ? stepKg(a.sets[0].kg, 1) : null;
+}
+function prefill(){
+  S.sug = null; S.chal = null; S.touched = false;
+  if (!S.sel) return;
+  if (catOf(S.sel) === CARDIO) { // 有酸素は直前か前回と同じ時間・距離
+    const today = dayOf(S.date).sets.filter(s => s.ex === S.sel && isCardioSet(s));
+    const prev = recentSessions(S.sel, S.date, 1)[0];
+    const ref = today[today.length-1] || (prev && prev.sets.find(isCardioSet));
+    if (ref) { S.min = ref.min; S.km = ref.km || 0; S.sug = {why: today.length ? "直前と同じ" : "前回と同じ"}; }
+    return;
+  }
+  const s = suggest(S.sel, S.date);
+  if (s) { S.kg = s.kg; S.reps = s.reps; S.sug = s; }
+  if (!dayOf(S.date).sets.some(x => x.ex === S.sel)) S.chal = challenge(S.sel, S.date);
+}
+
+/* ---------- render ---------- */
+function render(){
+  S.pr = computePRs();
+  $("tab-log").setAttribute("aria-selected", S.view === "log");
+  $("tab-cal").setAttribute("aria-selected", S.view === "cal");
+  $("tab-hist").setAttribute("aria-selected", S.view === "hist");
+  $("view-log").hidden = S.view !== "log";
+  $("view-log").style.display = S.view === "log" ? "flex" : "none";
+  $("view-cal").hidden = S.view !== "cal";
+  $("view-hist").hidden = S.view !== "hist";
+  if (S.view === "log") renderLog(); else if (S.view === "cal") renderCal(); else renderHist();
+}
+
+const SOLID = 10; // この数以上のセットで「しっかり」
+function renderCal(){
+  const [y, m] = S.calMonth;
+  const now = new Date();
+  $("cal-title").textContent = `${y}年${m+1}月`;
+  const atCurrent = y === now.getFullYear() && m === now.getMonth();
+  $("cal-next").disabled = atCurrent; $("cal-next").style.opacity = atCurrent ? .3 : 1;
+
+  const first = new Date(y, m, 1), n = new Date(y, m+1, 0).getDate(), today = todayStr();
+  let days = 0, solid = 0, sets = 0, vol = 0, mins = 0;
+  const catDays = {};
+  const cells = ["日","月","火","水","木","金","土"].map(w => `<div class="dow">${w}</div>`);
+  for (let i = 0; i < first.getDay(); i++) cells.push(`<span class="cell blank"></span>`);
+  for (let d = 1; d <= n; d++) {
+    const ds = toStr(new Date(y, m, d)), ss = (S.days[ds]?.sets) || [];
+    const cls = ["cell"];
+    if (ds === today) cls.push("today");
+    if (ds > today) cls.push("future");
+    if (ss.length) { days++; sets += ss.length; mins += (sessionTime(ds) || {min:0}).min; vol += ss.reduce((a,s) => a + s.kg*s.reps, 0);
+      if (ss.length >= SOLID) { solid++; cls.push("done"); } else cls.push("light"); }
+    const hasPR = ss.some(s => S.pr[s.id]);
+    const parts = [...new Set(ss.map(s => catOf(s.ex)))].sort(byCatOrder);
+    parts.forEach(c => catDays[c] = (catDays[c] || 0) + 1);
+    const label = `${m+1}月${d}日${ss.length ? `、${parts.join("・")}、${ss.length}セット` : ""}${hasPR ? "、自己ベスト更新" : ""}`;
+    cells.push(ds > today
+      ? `<span class="${cls.join(" ")}">${d}<span class="cc"></span></span>`
+      : `<button class="${cls.join(" ")}" data-day="${ds}" aria-label="${label}">${hasPR ? '<span class="prdot">PR</span>' : ""}${d}<span class="cc">${parts.map(c => `<i style="--cc:${CAT_COLOR[c]}">${CAT_SHORT[c]}</i>`).join("")}</span></button>`);
+  }
+  $("cal-grid").innerHTML = cells.join("");
+  $("cal-cats").innerHTML = CATS.map(c => `<span class="${catDays[c] ? "" : "zero"}">${catTag(c)}<b>${catDays[c] || 0}</b>日</span>`).join("")
+    + (catDays["その他"] ? `<span>${catTag("その他")}<b>${catDays["その他"]}</b>日</span>` : "");
+  $("cal-sum").innerHTML = `<span><strong>${days}</strong>トレーニング日</span><span><strong>${solid}</strong>しっかり</span><span><strong>${mins ? fmtDur(mins) : "—"}</strong>合計時間</span><span><strong>${sets}</strong>セット</span><span><strong>${Math.round(vol).toLocaleString()}</strong>総挙上量 kg</span>`;
+}
+
+function renderLog(){
+  const isToday = S.date === todayStr();
+  $("date-label").textContent = (isToday ? "今日 " : "") + jpDate(S.date);
+  $("go-today").hidden = isToday;
+  $("next-day").disabled = isToday;
+  $("next-day").style.opacity = isToday ? .3 : 1;
+
+  const doneCats = new Set(dayOf(S.date).sets.map(s => catOf(s.ex)));
+  const cats = S.exercises.some(e => catOf(e) === "その他") ? [...CATS, "その他"] : CATS;
+  $("cats").innerHTML = cats.map(c => `<button class="cat" data-cat="${c}" aria-pressed="${c === S.cat}" style="--cc:${CAT_COLOR[c]}">${c}${doneCats.has(c) ? '<i class="did" title="この日にやった部位"></i>' : ""}</button>`).join("");
+
+  const chips = S.exercises.filter(e => catOf(e) === S.cat).map(e => `<button class="chip" data-ex="${esc(e)}" aria-pressed="${!S.editing && e === S.sel}">${esc(e)}${S.editing ? '<span class="x" aria-label="削除">×</span>' : ""}</button>`);
+  chips.push(`<button class="chip ghost" id="chip-add">＋ ${S.cat}の種目</button>`);
+  chips.push(`<button class="chip ghost" id="chip-edit">${S.editing ? "完了" : "編集"}</button>`);
+  $("chips").innerHTML = chips.join("");
+
+  const cardio = S.sel && catOf(S.sel) === CARDIO;
+  $("lab-a").textContent = cardio ? "時間" : "重量"; $("unit-a").textContent = cardio ? "分" : "kg";
+  $("lab-b").textContent = cardio ? "距離" : "回数"; $("unit-b").textContent = cardio ? "km" : "回";
+  $("kg").inputMode = cardio ? "numeric" : "decimal"; $("reps").inputMode = cardio ? "decimal" : "numeric";
+  if (document.activeElement !== $("kg")) $("kg").value = cardio ? S.min : (S.kg > 0 ? fmtKg(S.kg) : "0");
+  if (document.activeElement !== $("reps")) $("reps").value = cardio ? fmtNum(S.km) : S.reps;
+  // スライダー：重量は0〜300kg固定、有酸素の時間は最長記録の1.5倍くらい（操作中は上限を動かさない）
+  const sl = $("kg-range"), cur = cardio ? S.min : S.kg;
+  if (document.activeElement !== sl) {
+    let best = 0;
+    for (const d in S.days) for (const s of S.days[d].sets) if (s.ex === S.sel) best = Math.max(best, cardio ? (s.min || 0) : s.kg);
+    const mx = cardio ? Math.max(60, Math.ceil(Math.max(best, cur) * 1.5 / 10) * 10)
+                      : 300;
+    sl.max = mx; sl.step = cardio ? 1 : 0.5;
+    $("sl-max").textContent = mx + (cardio ? "分" : "kg");
+    $("sl-hint").textContent = `左右にスライドで${cardio ? "時間" : "重量"}を変更`;
+    sl.setAttribute("aria-label", `${cardio ? "時間" : "重量"}をスライドで調整`);
+  }
+  sl.value = cur;
+  sl.style.setProperty("--p", Math.min(100, cur / sl.max * 100) + "%");
+  $("add-set").disabled = !S.sel || S.editing;
+  $("add-set").textContent = S.sel ? `${S.sel} を記録` : "種目を選んでください";
+
+  const prev = S.sel && lastSession(S.sel, S.date);
+  $("prev-info").innerHTML = (prev ? `前回 ${shortDate(prev.date)}：<b>${prev.sets.map(setTxt).join(" · ")}</b>`
+                                   : (S.sel ? `${esc(S.sel)} の過去の記録はまだありません` : ""))
+    + (S.sug && !S.touched ? `<span class="auto">自動入力：${esc(S.sug.why)}</span>` : "")
+    + (S.chal && S.kg !== S.chal ? `<button class="chal" id="chal">前回までの重さが安定しています。${fmtKg(S.chal)}kg に挑戦する</button>` : "");
+
+  const day = dayOf(S.date);
+  const groups = [];
+  day.sets.forEach(s => { let g = groups.find(x => x.ex === s.ex); if (!g) groups.push(g = {ex:s.ex, sets:[]}); g.sets.push(s); });
+  const vol = day.sets.reduce((a,s) => a + s.kg*s.reps, 0);
+  const st = sessionTime(S.date);
+  $("daysum").innerHTML = day.sets.length
+    ? `<span class="dur">トレーニング時間 <strong>${st ? fmtDur(st.min) : "—"}</strong>${st ? `<em>${hm(st.start)}〜${hm(st.end)}</em>` : `<em>2セット目から計測</em>`}</span>
+       <span class="parts">部位 ${[...doneCats].sort(byCatOrder).map(catTag).join("")}</span>
+       <span><strong>${groups.length}</strong> 種目 ·<strong>${day.sets.length}</strong> セット · 総挙上量 <strong>${Math.round(vol).toLocaleString()}</strong> kg</span><span id="rest"></span>`
+    : "";
+  $("log").innerHTML = groups.length ? groups.map(g => `
+    <div class="exblock">
+      <h3><span class="exn">${catTag(catOf(g.ex))}${esc(g.ex)}</span><span>${g.sets.length}セット</span></h3>
+      <div class="sets">${g.sets.map((s,i) => `
+        <div class="setrow">
+          <button class="set${S.selSet === s.id ? " sel" : ""}" data-set="${s.id}">
+            <span class="n">${i+1}</span>
+            <span class="w">${isCardioSet(s) ? `${s.min}<small>分</small>${s.km ? `${fmtNum(s.km)}<small>km</small>` : ""}`
+              : `${s.kg > 0 ? `${fmtKg(s.kg)}<small>kg</small>` : `自重<small></small>`}× ${s.reps}<small>回</small>`}</span>
+            ${S.pr[s.id] ? `<span class="prb">PR ${S.pr[s.id].type}</span>` : ""}
+          </button>
+          ${S.selSet === s.id ? `<button class="del" data-del="${s.id}">削除</button>` : ""}
+        </div>`).join("")}</div>
+    </div>`).join("")
+    : `<p class="empty">${isToday ? "まだ記録がありません。上で種目・重量・回数を選んで<b>記録</b>を押すと、ここに1セットずつ並びます。" : "この日の記録はありません。"}</p>`;
+  if (memoDate !== S.date) { flushMemo(); memoDate = S.date; $("memo").value = dayOf(S.date).memo || ""; $("memo-state").textContent = ""; }
+  else if (document.activeElement !== $("memo") && !memoTimer) $("memo").value = dayOf(S.date).memo || "";
+  tickRest();
+}
+
+function tickRest(){
+  const el = $("rest"); if (!el) return;
+  const sets = dayOf(S.date).sets;
+  if (S.date !== todayStr() || !sets.length) { el.textContent = ""; return; }
+  const sec = Math.floor((Date.now() - Math.max(...sets.map(s => s.at || 0))) / 1000);
+  el.textContent = sec >= 0 && sec < 1800 ? `休憩 ${Math.floor(sec/60)}:${pad(sec%60)}` : "";
+}
+setInterval(tickRest, 1000);
+
+function renderHist(){
+  const dates = sortedDates();
+  const stats = {};
+  dates.forEach(d => S.days[d].sets.forEach(s => {
+    if (isCardioSet(s)) {
+      const st = stats[s.ex] ||= {ex:s.ex, cardio:true, km:0, min:0, sessions:new Map(), last:d};
+      st.km = Math.max(st.km, s.km || 0); st.min = Math.max(st.min, s.min || 0);
+      st.sessions.set(d, (st.sessions.get(d) || 0) + (s.km || 0)); st.last = d;
+      return;
+    }
+    const st = stats[s.ex] ||= {ex:s.ex, top:null, best:null, sessions:new Map(), last:d};
+    if (!st.top || s.kg > st.top.kg || (s.kg === st.top.kg && s.reps > st.top.reps)) st.top = {...s, date:d};
+    if (!st.best || e1rm(s) > e1rm(st.best)) st.best = s;
+    st.sessions.set(d, Math.max(st.sessions.get(d) || 0, s.kg));
+    st.last = d;
+  }));
+  const all = Object.values(stats);
+  const order = [...CATS, "その他"];
+  const row = st => {
+    const open = S.openBest === st.ex;
+    const ks = st.cardio
+      ? `<span class="k"><small>最長距離</small>${st.km ? fmtNum(st.km) + "km" : "—"}</span><span class="k"><small>最長時間</small>${st.min}分</span>`
+      : `<span class="k"><small>最高重量</small>${st.top.kg > 0 ? fmtKg(st.top.kg) + "kg×" + st.top.reps : "自重×" + st.top.reps}</span>
+         <span class="k"><small>推定1RM</small>${st.best.kg > 0 ? Math.round(e1rm(st.best)*2)/2 + "kg" : "—"}</span>`;
+    return `<button class="best" data-best="${esc(st.ex)}" aria-expanded="${open}">
+      <span class="name">${esc(st.ex)}</span>${ks}
+      <span class="meta">${st.sessions.size}回実施 · 最終 ${shortDate(st.last)}${open ? "" : " · タップで推移"}</span>
+      ${open ? spark([...st.sessions.entries()].slice(-16)) : ""}
+    </button>`;
+  };
+  $("bests").innerHTML = all.length ? order.map(c => {
+    const list = all.filter(st => catOf(st.ex) === c).sort((a,b) => b.last.localeCompare(a.last));
+    return list.length ? `<h3 class="cathead">${c}</h3>${list.map(row).join("")}` : "";
+  }).join("") : `<p class="empty">記録をつけると、部位ごとに種目の最高重量と推定1RM（Epley式）がここに出ます。</p>`;
+
+  $("daylist").innerHTML = dates.slice().reverse().map(d => {
+    const groups = {}; S.days[d].sets.forEach(s => (groups[s.ex] ||= []).push(s));
+    const parts = [...new Set(S.days[d].sets.map(s => catOf(s.ex)))].sort(byCatOrder);
+    return `<button class="day" data-day="${d}">
+      <span class="d"><span class="dd">${jpDate(d)}${parts.map(catTag).join("")}</span><span>${(n => n ? `<em class="prc">PR ${n}</em> · ` : "")(S.days[d].sets.filter(s => S.pr[s.id]).length)}${S.days[d].sets.length}セット${(t => t ? ` · ${fmtDur(t.min)}` : "")(sessionTime(d))}</span></span>
+      ${Object.entries(groups).map(([ex,ss]) => `<span class="l"><b>${esc(ex)}</b>　${ss.map(setTxt).join(", ")}</span>`).join("")}
+      ${S.days[d].memo ? `<span class="l memo-l">メモ：${esc(S.days[d].memo.length > 60 ? S.days[d].memo.slice(0, 60) + "…" : S.days[d].memo)}</span>` : ""}
+    </button>`;
+  }).join("") || `<p class="empty">まだありません。</p>`;
+}
+
+function spark(pts){
+  if (pts.length < 2) return `<span class="meta">推移はセッションが2回以上になると表示されます。</span>`;
+  const W = 320, H = 90, L = 34, R = 10, T = 12, B = 22;
+  const vs = pts.map(p => p[1]); let lo = Math.min(...vs), hi = Math.max(...vs);
+  if (hi === lo) { hi += 2.5; lo = Math.max(0, lo - 2.5); }
+  const x = i => L + i * (W - L - R) / (pts.length - 1);
+  const y = v => T + (hi - v) * (H - T - B) / (hi - lo);
+  const line = pts.map((p,i) => `${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+  const area = `${L},${H-B} ${line} ${x(pts.length-1).toFixed(1)},${H-B}`;
+  const last = pts[pts.length-1];
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="最高重量の推移">
+    <line x1="${L}" x2="${W-R}" y1="${y(hi)}" y2="${y(hi)}" stroke="var(--line)" stroke-dasharray="2 3"/>
+    <line x1="${L}" x2="${W-R}" y1="${y(lo)}" y2="${y(lo)}" stroke="var(--line)" stroke-dasharray="2 3"/>
+    <text x="${L-6}" y="${y(hi)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-num)">${fmtKg(hi)}</text>
+    <text x="${L-6}" y="${y(lo)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-num)">${fmtKg(lo)}</text>
+    <polygon points="${area}" fill="var(--accent-soft)"/>
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(pts.length-1)}" cy="${y(last[1])}" r="4" fill="var(--accent)"/>
+    <text x="${L}" y="${H-6}" font-size="11" fill="var(--muted)" font-family="var(--f-num)">${shortDate(pts[0][0])}</text>
+    <text x="${W-R}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--f-num)">${shortDate(last[0])}</text>
+  </svg>`;
+}
+
+/* ---------- 1日のメモ（入力が止まったら自動保存） ---------- */
+let memoTimer = null, memoDate = null;
+function flushMemo(){
+  clearTimeout(memoTimer); memoTimer = null;
+  if (!memoDate) return;
+  const v = $("memo").value.slice(0, 1000);
+  if (v === ((S.days[memoDate] && S.days[memoDate].memo) || "")) return;
+  const day = S.days[memoDate] ||= {date:memoDate, sets:[]};
+  day.memo = v; persist(memoDate);
+  $("memo-state").textContent = "保存しました";
+}
+$("memo").addEventListener("input", () => {
+  $("memo-state").textContent = "入力中…";
+  clearTimeout(memoTimer); memoTimer = setTimeout(flushMemo, 800);
+});
+$("memo").addEventListener("blur", flushMemo);
+
+/* ---------- actions ---------- */
+let undo = null, toastTimer = null;
+function toast(msg, u){
+  undo = u; $("toast-msg").textContent = msg; $("toast-undo").hidden = !u; $("toast").hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; undo = null; }, 5000);
+}
+$("toast-undo").onclick = () => { if (undo) undo(); $("toast").hidden = true; undo = null; };
+
+// 重量はすべて0.5kg刻み（刻みを変えたくなったら帯を足す）
+const KG_BANDS = [{to:Infinity, step:0.5}];
+function stepKg(kg, sign){
+  const r = v => Math.max(0, Math.round(v * 100) / 100);
+  if (sign > 0) {
+    const band = KG_BANDS.find(b => kg < b.to);
+    return r(Math.min(band.to, kg + band.step));
+  }
+  const i = KG_BANDS.findIndex(b => kg <= b.to);
+  const floor = i > 0 ? KG_BANDS[i-1].to : 0;
+  return r(Math.max(floor, kg - KG_BANDS[i].step));
+}
+const selIsCardio = () => !!S.sel && catOf(S.sel) === CARDIO;
+function readInputs(){
+  const a = parseFloat(String($("kg").value).replace(",", "."));
+  const b = parseFloat(String($("reps").value).replace(",", "."));
+  if (selIsCardio()) {
+    if (!isNaN(a)) S.min = Math.max(1, Math.min(600, Math.round(a)));
+    if (!isNaN(b)) S.km = Math.max(0, Math.min(300, Math.round(b * 100) / 100));
+  } else {
+    if (!isNaN(a)) S.kg = Math.max(0, Math.min(999, a));
+    if (!isNaN(b)) S.reps = Math.max(1, Math.min(999, Math.round(b)));
+  }
+}
+$("kg").addEventListener("change", () => { readInputs(); S.touched = true; render(); });
+$("reps").addEventListener("change", () => { readInputs(); S.touched = true; render(); });
+$("prev-info").addEventListener("click", e => { if (!e.target.closest("#chal")) return;
+  S.kg = S.chal; S.chal = null; S.touched = true; render(); });
+[$("kg"), $("reps")].forEach(i => i.addEventListener("focus", () => i.select()));
+
+document.querySelectorAll("[data-step]").forEach(b => b.addEventListener("click", () => {
+  readInputs();
+  const sign = +b.dataset.sign, cardio = selIsCardio();
+  if (b.dataset.step === "a") {
+    if (cardio) S.min = Math.max(1, S.min + 5 * sign);
+    else S.kg = stepKg(S.kg, sign);
+  } else {
+    if (cardio) S.km = Math.max(0, Math.round((S.km + 0.5 * sign) * 100) / 100);
+    else S.reps = Math.max(1, S.reps + sign);
+  }
+  S.touched = true; render();
+}));
+
+$("kg-range").addEventListener("input", e => {
+  const v = +e.target.value;
+  if (selIsCardio()) S.min = Math.max(1, Math.round(v)); else S.kg = Math.round(v * 2) / 2;
+  S.touched = true; render();
+});
+$("kg-range").addEventListener("change", e => e.target.blur());
+
+$("add-set").onclick = () => {
+  readInputs();
+  if (!S.sel) return;
+  const day = S.days[S.date] ||= {date:S.date, sets:[]};
+  const added = selIsCardio()
+    ? {id:uid(), ex:S.sel, kg:0, reps:0, min:S.min, km:S.km, at:Date.now()}
+    : {id:uid(), ex:S.sel, kg:S.kg, reps:S.reps, at:Date.now()};
+  day.sets.push(added);
+  S.selSet = null;
+  persist(S.date); prefill(); render();
+  if (S.pr[added.id]) showPR(added, S.pr[added.id]);
+};
+
+$("log").addEventListener("click", e => {
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    const day = S.days[S.date]; const i = day.sets.findIndex(s => s.id === del.dataset.del);
+    if (i < 0) return;
+    const [removed] = day.sets.splice(i, 1); const date = S.date;
+    S.selSet = null; persist(date); render();
+    toast(`${removed.ex} ${setTxt(removed)} を削除しました`, () => {
+      const d = S.days[date] ||= {date, sets:[]}; d.sets.splice(Math.min(i, d.sets.length), 0, removed); persist(date); render();
+    });
+    return;
+  }
+  const s = e.target.closest("[data-set]");
+  if (s) { S.selSet = S.selSet === s.dataset.set ? null : s.dataset.set; render(); }
+});
+
+$("chips").addEventListener("click", e => {
+  if (e.target.closest("#chip-add")) { $("add-row").hidden = false; $("new-ex").focus(); return; }
+  if (e.target.closest("#chip-edit")) { S.editing = !S.editing; render(); return; }
+  const c = e.target.closest("[data-ex]"); if (!c) return;
+  const ex = c.dataset.ex;
+  if (S.editing) {
+    const i = S.exercises.indexOf(ex); S.exercises.splice(i, 1);
+    if (S.sel === ex) S.sel = S.exercises.find(e => catOf(e) === S.cat) || null;
+    persist("prefs"); render();
+    toast(`「${ex}」を一覧から外しました（記録は残ります）`, () => { S.exercises.splice(i, 0, ex); persist("prefs"); render(); });
+    return;
+  }
+  S.sel = ex; prefill(); render();
+});
+
+// 部位を切り替えたら、その部位で最近やった種目（なければ先頭）を選ぶ
+$("cats").addEventListener("click", e => {
+  const b = e.target.closest("[data-cat]"); if (!b) return;
+  S.cat = b.dataset.cat; S.editing = false; $("add-row").hidden = true;
+  const inCat = S.exercises.filter(x => catOf(x) === S.cat);
+  let pick = null;
+  for (const d of sortedDates().reverse()) {
+    const hit = S.days[d].sets.slice().reverse().find(s => inCat.includes(s.ex));
+    if (hit) { pick = hit.ex; break; }
+  }
+  S.sel = pick || inCat[0] || null;
+  prefill(); render();
+});
+
+function addExercise(){
+  const name = $("new-ex").value.trim().slice(0, 30);
+  if (!name) { $("add-row").hidden = true; return; }
+  if (!S.exercises.includes(name)) S.exercises.push(name);
+  if (catOf(name) !== S.cat) S.cats[name] = S.cat;
+  persist("prefs");
+  S.sel = name; S.editing = false; $("new-ex").value = ""; $("add-row").hidden = true; prefill(); render();
+}
+$("new-ex-save").onclick = addExercise;
+$("new-ex").addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) addExercise(); if (e.key === "Escape") $("add-row").hidden = true; });
+
+$("prev-day").onclick = () => { S.date = shift(S.date, -1); S.selSet = null; prefill(); render(); };
+$("next-day").onclick = () => { if (S.date < todayStr()) { S.date = shift(S.date, 1); S.selSet = null; prefill(); render(); } };
+$("go-today").onclick = () => { S.date = todayStr(); S.selSet = null; prefill(); render(); };
+
+$("tab-log").onclick = () => { S.view = "log"; render(); };
+$("tab-hist").onclick = () => { S.view = "hist"; render(); };
+$("tab-cal").onclick = () => { S.view = "cal"; render(); };
+$("cal-prev").onclick = () => { const [y,m] = S.calMonth; S.calMonth = m === 0 ? [y-1, 11] : [y, m-1]; render(); };
+$("cal-next").onclick = () => { const [y,m] = S.calMonth, now = new Date();
+  if (y === now.getFullYear() && m === now.getMonth()) return;
+  S.calMonth = m === 11 ? [y+1, 0] : [y, m+1]; render(); };
+$("cal-grid").addEventListener("click", e => { const b = e.target.closest("[data-day]"); if (!b) return;
+  S.date = b.dataset.day; S.view = "log"; S.selSet = null; prefill(); render(); scrollTo(0, 0); });
+$("bests").addEventListener("click", e => { const b = e.target.closest("[data-best]"); if (!b) return;
+  S.openBest = S.openBest === b.dataset.best ? null : b.dataset.best; render(); });
+$("daylist").addEventListener("click", e => { const b = e.target.closest("[data-day]"); if (!b) return;
+  S.date = b.dataset.day; S.view = "log"; S.selSet = null; prefill(); render(); scrollTo(0, 0); });
+
+$("bk-export").onclick = exportBackup;
+$("bk-file").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; if (f) importBackup(f); e.target.value = ""; });
+initStore();
+// オフラインでも開けるようにする（https で公開したときだけ動く）
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+// ブラウザに記録を勝手に消されにくくする
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+</script>
+
+</body></html>
