@@ -187,6 +187,11 @@ h2.sec{font-size:13px;letter-spacing:.08em;color:var(--muted);margin:8px 0 6px;f
 #prev-info .auto{color:var(--ink)}
 #rest{color:var(--ink)}
 @media (prefers-reduced-motion:no-preference){.set,.chip,.primary{transition:background .12s,color .12s}}
+.warn,.hint{border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.6;display:flex;flex-direction:column;gap:2px}
+.warn{background:#3A0F1C;border:1px solid var(--danger);color:#FFE3EA}
+.warn b{color:var(--danger);font-size:14px}
+.hint{background:var(--accent-soft);border:1px dashed var(--accent);color:var(--ink)}
+.hint b{font-size:14px}
 .backup{display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--muted)}
 .backup p{margin:0}
 .brow{display:flex;gap:8px}
@@ -197,6 +202,9 @@ input,textarea{-webkit-user-select:text;user-select:text}
 </style>
 
 <div class="app">
+  <div class="warn" id="store-warn" role="alert" hidden><b>記録を保存できない状態です</b>このままアプリを閉じると記録が消えます。iPhoneは「設定 → アプリ → Safari」で「すべてのCookieをブロック」をオフにし、プライベートブラウズではない通常のタブで開き直してください。</div>
+  <div class="warn" id="inapp-warn" role="alert" hidden><b>LINEなどのアプリの中で開いています</b>ここでは記録が消えることがあります。右下や右上のメニューから「ブラウザで開く」を選び、Safari（AndroidはChrome）で開いてください。</div>
+  <div class="hint" id="ios-hint" hidden><b>ホーム画面に追加して使ってください</b>下の共有ボタン（□に↑）→「ホーム画面に追加」。以後はアイコンから開いてください。Safariで付けた記録と、アイコンから開いたアプリの記録は別々に保存されます。</div>
   <header class="top">
     <div class="brand"><small>TRAINING LOG</small><h1>筋トレ帳</h1></div>
     <nav class="tabs" role="tablist">
@@ -341,7 +349,10 @@ const S = { days:{}, exercises:[...DEFAULT_EX], cats:{}, cat:"胸", sel:"ベン�
             editing:false, selSet:null, view:"log", openBest:null, mode:"loading",
             calMonth:[new Date().getFullYear(), new Date().getMonth()] };
 
-/* ---------- storage: この端末の中だけに保存（アプリでは Capacitor Preferences、ブラウザでは localStorage） ---------- */
+/* ---------- storage: この端末の中だけに保存 ----------
+   iPhone のホーム画面アプリは、閉じる直前の書き込みを落とすことがあるため、
+   localStorage と IndexedDB の2か所に毎回すぐ保存し、起動時は新しい方を使う。
+   どちらにも保存できない設定（Cookie ブロック・プライベートブラウズ等）なら、はっきり警告する。 */
 const Prefs = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) || null;
 const isApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 function readData(o){ if (o) { S.days = o.days || {}; applyPrefs(o); } }
@@ -353,32 +364,88 @@ function applyPrefs(p){
   if (!p.v) for (const e of DEFAULT_EX) if (!S.exercises.includes(e)) S.exercises.push(e);
 }
 const prefsBody = () => ({exercises:S.exercises, cats:S.cats, v:2});
-const snapshot = () => JSON.stringify({days:S.days, ...prefsBody()});
-let saveTimer = null;
+const snapshot = () => JSON.stringify({days:S.days, ...prefsBody(), t:Date.now()});
+
+// IndexedDB（失敗しても null を返すだけ）
+let idbP = null;
+function idb(){
+  if (idbP) return idbP;
+  idbP = new Promise(res => {
+    try {
+      const rq = indexedDB.open("kintorecho", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("kv");
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = rq.onblocked = () => res(null);
+    } catch { res(null); }
+    setTimeout(() => res(null), 3000);
+  });
+  return idbP;
+}
+async function idbGet(){
+  const db = await idb(); if (!db) return null;
+  return new Promise(res => { try {
+    const r = db.transaction("kv").objectStore("kv").get(LS_KEY);
+    r.onsuccess = () => res(r.result || null); r.onerror = () => res(null);
+  } catch { res(null); } });
+}
+async function idbPut(json){
+  const db = await idb(); if (!db) return false;
+  return new Promise(res => { try {
+    const tx = db.transaction("kv", "readwrite", {durability:"strict"});
+    tx.objectStore("kv").put(json, LS_KEY);
+    tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+  } catch { res(false); } });
+}
+
+let lsOK = true, idbOK = true, warned = false;
 function saveLocal(){
   const json = snapshot();
-  try { localStorage.setItem(LS_KEY, json); } catch {}
-  if (Prefs) { clearTimeout(saveTimer); saveTimer = setTimeout(() => {
-    Prefs.set({key:LS_KEY, value:json}).catch(() => note("保存できませんでした。端末の空き容量を確認してください。")); }, 150); }
+  try { localStorage.setItem(LS_KEY, json); lsOK = localStorage.getItem(LS_KEY) === json; } catch { lsOK = false; }
+  idbPut(json).then(ok => { idbOK = ok; checkStorage(); });
+  if (Prefs) Prefs.set({key:LS_KEY, value:json}).catch(() => note("保存できませんでした。端末の空き容量を確認してください。"));
+  checkStorage();
 }
-function persist(){ saveLocal(); }
+function checkStorage(){
+  const broken = !isApp && !lsOK && !idbOK;
+  $("store-warn").hidden = !broken;
+  if (broken && !warned) { warned = true; window.scrollTo(0, 0); }
+}
+function persist(){ saveLocal(); storeNote(); }
 function note(t){ $("save-note").textContent = t; }
 const STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
-const LOCAL_NOTE = isApp || STANDALONE
-  ? "記録はこの端末の中だけに保存しています。機種変更の前に「履歴 → バックアップ」で書き出してください。"
-  : "記録はこのブラウザの中に保存しています。ホーム画面に追加すると、アプリとして使えて記録も消えにくくなります。";
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const IN_APP = /\bLine\/|FBAN|FBAV|Instagram|Twitter|MicroMessenger|KAKAOTALK|TikTok|BytedanceWebview/i.test(navigator.userAgent);
+const countDays = () => Object.keys(S.days).filter(k => S.days[k].sets && S.days[k].sets.length).length;
+function storeNote(){
+  const n = countDays();
+  note((n ? `この端末に ${n}日分の記録を保存しています。` : "記録はこの端末の中だけに保存されます。")
+    + "機種変更の前に「履歴 → バックアップ」で書き出してください。");
+}
 
 async function initStore(){
-  let o = null;
-  if (Prefs) { try { const r = await Prefs.get({key:LS_KEY}); if (r && r.value) o = JSON.parse(r.value); } catch {} }
-  if (!o) { try { o = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch {} }
+  const parse = s => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
+  const cands = [];
+  if (Prefs) { try { const r = await Prefs.get({key:LS_KEY}); cands.push(parse(r && r.value)); } catch {} }
+  try { cands.push(parse(localStorage.getItem(LS_KEY))); } catch { lsOK = false; }
+  cands.push(parse(await idbGet()));
+  // 一番新しいもの（同じなら記録が多い方）を使う
+  const size = o => Object.keys(o.days || {}).length;
+  const o = cands.filter(Boolean).sort((a, b) => ((b.t || 0) - (a.t || 0)) || (size(b) - size(a)))[0] || null;
   readData(o);
   if (!S.exercises.includes(S.sel)) S.sel = S.exercises.find(e => catOf(e) === S.cat) || null;
-  prefill(); note(LOCAL_NOTE); render();
-  if (Prefs && o) saveLocal(); // localStorage にだけあった記録を Preferences に移す
+  prefill(); render();
+  if (o) saveLocal(); else { // 保存できる環境かを最初に確かめる
+    try { localStorage.setItem(LS_KEY + "-probe", "1"); lsOK = localStorage.getItem(LS_KEY + "-probe") === "1"; localStorage.removeItem(LS_KEY + "-probe"); } catch { lsOK = false; }
+    idbOK = !!(await idb()); checkStorage();
+  }
+  $("inapp-warn").hidden = !IN_APP;
+  $("ios-hint").hidden = IN_APP || isApp || STANDALONE || !IS_IOS;
+  storeNote();
 }
-// アプリが裏に回る直前に、書きかけのメモも保存する
-document.addEventListener("visibilitychange", () => { if (document.hidden) { flushMemo(); if (Prefs) { clearTimeout(saveTimer); Prefs.set({key:LS_KEY, value:snapshot()}).catch(() => {}); } } });
+// アプリが裏に回る・閉じられる直前に、書きかけのメモも含めてもう一度保存する
+const flushAll = () => { flushMemo(); saveLocal(); };
+document.addEventListener("visibilitychange", () => { if (document.hidden) flushAll(); });
+addEventListener("pagehide", flushAll);
 
 /* ---------- バックアップ（書き出し・読み込み） ---------- */
 async function exportBackup(){
@@ -620,7 +687,7 @@ function renderLog(){
           ${S.selSet === s.id ? `<button class="del" data-del="${s.id}">削除</button>` : ""}
         </div>`).join("")}</div>
     </div>`).join("")
-    : `<p class="empty">${isToday ? "まだ記録がありません。上で種目・重量・回数を選んで<b>記録</b>を押すと、ここに1セットずつ並びます。" : "この日の記録はありません。"}</p>`;
+    : `<p class="empty">${isToday ? "まだ記録がありません。上で種目・重量・回数を選んで<b>記録</b>を押すと、ここに1セットずつ並びます。" : "この日の記録はありません。"}${(ds => ds.length ? `<br>前回（${shortDate(ds[ds.length-1])}）までの記録は「カレンダー」「履歴」タブで見られます。` : "")(sortedDates().filter(d => d < S.date))}</p>`;
   if (memoDate !== S.date) { flushMemo(); memoDate = S.date; $("memo").value = dayOf(S.date).memo || ""; $("memo-state").textContent = ""; }
   else if (document.activeElement !== $("memo") && !memoTimer) $("memo").value = dayOf(S.date).memo || "";
   tickRest();
