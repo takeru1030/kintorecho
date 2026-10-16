@@ -192,6 +192,12 @@ h2.sec{font-size:13px;letter-spacing:.08em;color:var(--muted);margin:8px 0 6px;f
 .warn b{color:var(--danger);font-size:14px}
 .hint{background:var(--accent-soft);border:1px dashed var(--accent);color:var(--ink)}
 .hint b{font-size:14px}
+.toast{width:min(440px,calc(100% - 32px));justify-content:space-between}
+.toast button{white-space:nowrap;flex:none}
+.toast.ok{background:#0E2A1F;border-color:#34D399;color:#D1FAE5;font-weight:700}
+.toast.ng{background:#3A0F1C;border-color:var(--danger);color:#FFE3EA;font-weight:700}
+.primary.done{background:#059669!important;box-shadow:0 8px 28px rgb(5 150 105 / .45)!important}
+@media (prefers-reduced-motion:no-preference){.primary.done{animation:pop .25s ease-out}@keyframes pop{from{transform:scale(.96)}to{transform:scale(1)}}}
 .backup{display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--muted)}
 .backup p{margin:0}
 .brow{display:flex;gap:8px}
@@ -401,16 +407,17 @@ let lsOK = true, idbOK = true, warned = false;
 function saveLocal(){
   const json = snapshot();
   try { localStorage.setItem(LS_KEY, json); lsOK = localStorage.getItem(LS_KEY) === json; } catch { lsOK = false; }
-  idbPut(json).then(ok => { idbOK = ok; checkStorage(); });
+  const done = idbPut(json).then(ok => { idbOK = ok; checkStorage(); return lsOK || idbOK || isApp; });
   if (Prefs) Prefs.set({key:LS_KEY, value:json}).catch(() => note("保存できませんでした。端末の空き容量を確認してください。"));
   checkStorage();
+  return done; // 保存できたら true
 }
 function checkStorage(){
   const broken = !isApp && !lsOK && !idbOK;
   $("store-warn").hidden = !broken;
   if (broken && !warned) { warned = true; window.scrollTo(0, 0); }
 }
-function persist(){ saveLocal(); storeNote(); }
+function persist(){ const p = saveLocal(); storeNote(); return p; }
 function note(t){ $("save-note").textContent = t; }
 const STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -655,7 +662,7 @@ function renderLog(){
   sl.value = cur;
   sl.style.setProperty("--p", Math.min(100, cur / sl.max * 100) + "%");
   $("add-set").disabled = !S.sel || S.editing;
-  $("add-set").textContent = S.sel ? `${S.sel} を記録` : "種目を選んでください";
+  if (!$("add-set").classList.contains("done")) $("add-set").textContent = S.sel ? `${S.sel} を記録` : "種目を選んでください";
 
   const prev = S.sel && lastSession(S.sel, S.date);
   $("prev-info").innerHTML = (prev ? `前回 ${shortDate(prev.date)}：<b>${prev.sets.map(setTxt).join(" · ")}</b>`
@@ -790,8 +797,10 @@ $("memo").addEventListener("blur", flushMemo);
 
 /* ---------- actions ---------- */
 let undo = null, toastTimer = null;
-function toast(msg, u){
+function toast(msg, u, kind){
   undo = u; $("toast-msg").textContent = msg; $("toast-undo").hidden = !u; $("toast").hidden = false;
+  $("toast").className = "toast" + (kind ? " " + kind : "");
+  $("toast-undo").textContent = kind ? "取り消す" : "元に戻す";
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { $("toast").hidden = true; undo = null; }, 5000);
 }
 $("toast-undo").onclick = () => { if (undo) undo(); $("toast").hidden = true; undo = null; };
@@ -855,9 +864,22 @@ $("add-set").onclick = () => {
     : {id:uid(), ex:S.sel, kg:S.kg, reps:S.reps, at:Date.now()};
   day.sets.push(added);
   S.selSet = null;
-  persist(S.date); prefill(); render();
+  const date = S.date, saved = persist(date); prefill(); render();
   if (S.pr[added.id]) showPR(added, S.pr[added.id]);
+  flashRecorded();
+  try { navigator.vibrate && navigator.vibrate(30); } catch {}
+  const label = `${added.ex}　${isCardioSet(added) ? setTxt(added) : `${added.kg > 0 ? fmtKg(added.kg) + "kg" : "自重"} × ${added.reps}回`}`;
+  const undoAdd = () => { const d = S.days[date]; if (!d) return; const i = d.sets.findIndex(x => x.id === added.id);
+    if (i >= 0) { d.sets.splice(i, 1); persist(date); prefill(); render(); } };
+  saved.then(ok => ok ? toast(`✓ 記録しました　${label}`, undoAdd, "ok")
+                      : toast(`記録しましたが、この端末に保存できていません`, undoAdd, "ng"));
 };
+// 記録ボタン自体も一瞬「記録しました」に変える
+let flashTimer = null;
+function flashRecorded(){
+  const b = $("add-set"); b.classList.add("done"); b.textContent = "✓ 記録しました";
+  clearTimeout(flashTimer); flashTimer = setTimeout(() => { b.classList.remove("done"); render(); }, 1200);
+}
 
 $("log").addEventListener("click", e => {
   const del = e.target.closest("[data-del]");
